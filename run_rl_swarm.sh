@@ -173,7 +173,7 @@ if [ "$CONNECT_TO_TESTNET" = true ]; then
 
     cd ..
 
-    echo_green ">> 正在等待 modal userData.json 文件创建..."
+    echo_green ">> 正在等待 modal userData.json 文件创建... 请在浏览器中打开 http://localhost:3000 并登录账号"
     while [ ! -f "modal-login/temp-data/userData.json" ]; do
         sleep 5  # 每 5 秒检查一次
     done
