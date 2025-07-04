@@ -2,29 +2,29 @@
 
 set -euo pipefail
 
-# General arguments
+# 通用参数
 ROOT=$PWD
 
-# GenRL Swarm version to use
+# 使用的 GenRL Swarm 版本
 GENRL_TAG="v0.1.1"
 
 export IDENTITY_PATH
 export GENSYN_RESET_CONFIG
 export CONNECT_TO_TESTNET=true
 export ORG_ID
-export HF_HUB_DOWNLOAD_TIMEOUT=120  # 2 minutes
+export HF_HUB_DOWNLOAD_TIMEOUT=120  # 2 分钟
 export SWARM_CONTRACT="0xFaD7C5e93f28257429569B854151A1B8DCD404c2"
 export HUGGINGFACE_ACCESS_TOKEN="None"
 
-# Path to an RSA private key. If this path does not exist, a new key pair will be created.
-# Remove this file if you want a new PeerID.
+# RSA 私钥的路径。如果该路径不存在，将创建一个新的密钥对。
+# 如果需要新的 PeerID，请删除此文件。
 DEFAULT_IDENTITY_PATH="$ROOT"/swarm.pem
 IDENTITY_PATH=${IDENTITY_PATH:-$DEFAULT_IDENTITY_PATH}
 
 DOCKER=${DOCKER:-""}
 GENSYN_RESET_CONFIG=${GENSYN_RESET_CONFIG:-""}
 
-# Bit of a workaround for the non-root docker container.
+# 针对非根 Docker 容器的一个变通方法。
 if [ -n "$DOCKER" ]; then
     volumes=(
         /home/gensyn/rl_swarm/modal-login/temp-data
@@ -38,10 +38,10 @@ if [ -n "$DOCKER" ]; then
     done
 fi
 
-# Will ignore any visible GPUs if set.
+# 如果设置了该参数，将忽略所有可见的 GPU。
 CPU_ONLY=${CPU_ONLY:-""}
 
-# Set if successfully parsed from modal-login/temp-data/userData.json.
+# 如果从 modal-login/temp-data/userData.json 成功解析，则设置该参数。
 ORG_ID=${ORG_ID:-""}
 
 GREEN_TEXT="\033[32m"
@@ -49,38 +49,44 @@ BLUE_TEXT="\033[34m"
 RED_TEXT="\033[31m"
 RESET_TEXT="\033[0m"
 
+# 输出绿色文本的函数
 echo_green() {
     echo -e "$GREEN_TEXT$1$RESET_TEXT"
 }
 
+# 输出蓝色文本的函数
 echo_blue() {
     echo -e "$BLUE_TEXT$1$RESET_TEXT"
 }
 
+# 输出红色文本的函数
 echo_red() {
     echo -e "$RED_TEXT$1$RESET_TEXT"
 }
 
 ROOT_DIR="$(cd $(dirname ${BASH_SOURCE[0]}) && pwd)"
 
-# Function to clean up the server process upon exit
+# 脚本退出时清理服务器进程的函数
 cleanup() {
-    echo_green ">> Shutting down trainer..."
+    echo_green ">> 正在关闭训练器..."
 
-    # Remove modal credentials if they exist
+    # 如果存在模态凭证，则删除它们
     # rm -r $ROOT_DIR/modal-login/temp-data/*.json 2> /dev/null || true
 
-    # Kill all processes belonging to this script's process group
+    # 杀死属于此脚本进程组的所有进程
     kill -- -$$ || true
 
     exit 0
 }
 
+# 错误通知函数
 errnotify() {
-    echo_red ">> An error was detected while running rl-swarm. See $ROOT/logs for full logs."
+    echo_red ">> 运行 rl-swarm 时检测到错误。请查看 $ROOT/logs 中的完整日志。"
 }
 
+# 捕获退出信号并执行清理操作
 trap cleanup EXIT
+# 捕获错误信号并执行错误通知
 trap errnotify ERR
 
 echo -e "\033[38;5;224m"
@@ -91,22 +97,23 @@ cat << "EOF"
     ██   ██ ██                 ██ ██ ███ ██ ██   ██ ██   ██ ██  ██  ██
     ██   ██ ███████       ███████  ███ ███  ██   ██ ██   ██ ██      ██
 
-    From Gensyn
+    来自 Gensyn
 
 EOF
 
-# Create logs directory if it doesn't exist
+# 如果日志目录不存在，则创建它
 mkdir -p "$ROOT/logs"
 
+# 如果连接到测试网络
 if [ "$CONNECT_TO_TESTNET" = true ]; then
-    # Run modal_login server.
-    echo "Please login to create an Ethereum Server Wallet"
+    # 运行模态登录服务器
+    echo "请登录以创建一个以太坊服务器钱包"
     cd modal-login
-    # Check if the yarn command exists; if not, install Yarn.
+    # 检查 yarn 命令是否存在；如果不存在，则安装 Yarn。
 
-    # Node.js + NVM setup
+    # Node.js + NVM 设置
     if ! command -v node > /dev/null 2>&1; then
-        echo "Node.js not found. Installing NVM and latest Node.js..."
+        echo "未找到 Node.js。正在安装 NVM 和最新的 Node.js..."
         export NVM_DIR="$HOME/.nvm"
         if [ ! -d "$NVM_DIR" ]; then
             curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
@@ -115,149 +122,150 @@ if [ "$CONNECT_TO_TESTNET" = true ]; then
         [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
         nvm install node
     else
-        echo "Node.js is already installed: $(node -v)"
+        echo "Node.js 已安装: $(node -v)"
     fi
 
     if ! command -v yarn > /dev/null 2>&1; then
-        # Detect Ubuntu (including WSL Ubuntu) and install Yarn accordingly
+        # 检测 Ubuntu（包括 WSL Ubuntu）并相应地安装 Yarn
         if grep -qi "ubuntu" /etc/os-release 2> /dev/null || uname -r | grep -qi "microsoft"; then
-            echo "Detected Ubuntu or WSL Ubuntu. Installing Yarn via apt..."
+            echo "检测到 Ubuntu 或 WSL Ubuntu。正在通过 apt 安装 Yarn..."
             curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | sudo apt-key add -
             echo "deb https://dl.yarnpkg.com/debian/ stable main" | sudo tee /etc/apt/sources.list.d/yarn.list
             sudo apt update && sudo apt install -y yarn
         else
-            echo "Yarn not found. Installing Yarn globally with npm (no profile edits)…"
-            # This lands in $NVM_DIR/versions/node/<ver>/bin which is already on PATH
+            echo "未找到 Yarn。正在使用 npm 全局安装 Yarn（不编辑配置文件）…"
+            # 此命令将 Yarn 安装到 $NVM_DIR/versions/node/<ver>/bin 目录，该目录已在 PATH 中
             npm install -g --silent yarn
         fi
     fi
 
     ENV_FILE="$ROOT"/modal-login/.env
     if [[ "$OSTYPE" == "darwin"* ]]; then
-        # macOS version
+        # macOS 版本
         sed -i '' "3s/.*/SMART_CONTRACT_ADDRESS=$SWARM_CONTRACT/" "$ENV_FILE"
     else
-        # Linux version
+        # Linux 版本
         sed -i "3s/.*/SMART_CONTRACT_ADDRESS=$SWARM_CONTRACT/" "$ENV_FILE"
     fi
 
-
-    # Docker image already builds it, no need to again.
+    # Docker 镜像已经构建过，无需再次构建。
     if [ -z "$DOCKER" ]; then
         yarn install --immutable
-        echo "Building server"
+        echo "正在构建服务器"
         yarn build > "$ROOT/logs/yarn.log" 2>&1
     fi
-    yarn start >> "$ROOT/logs/yarn.log" 2>&1 & # Run in background and log output
+    yarn start >> "$ROOT/logs/yarn.log" 2>&1 & # 在后台运行并记录输出
 
-    SERVER_PID=$!  # Store the process ID
-    echo "Started server process: $SERVER_PID"
+    SERVER_PID=$!  # 存储进程 ID
+    echo "已启动服务器进程: $SERVER_PID"
     sleep 5
 
-    # Try to open the URL in the default browser
+    # 尝试在默认浏览器中打开 URL
     #if [ -z "$DOCKER" ]; then
-     #   if open http://localhost:3000 2> /dev/null; then
-      #      echo_green ">> Successfully opened http://localhost:3000 in your default browser."
-       # else
-        #    echo ">> Failed to open http://localhost:3000. Please open it manually."
-        #fi
+    #    if open http://localhost:3000 2> /dev/null; then
+    #        echo_green ">> 已成功在默认浏览器中打开 http://localhost:3000。"
+    #    else
+    #        echo ">> 无法打开 http://localhost:3000。请手动打开。"
+    #    fi
     #else
-     #   echo_green ">> Please open http://localhost:3000 in your host browser."
+    #    echo_green ">> 请在主机浏览器中打开 http://localhost:3000。"
     #fi
 
     cd ..
 
-    echo_green ">> Waiting for modal userData.json to be created..."
+    echo_green ">> 正在等待 modal userData.json 文件创建..."
     while [ ! -f "modal-login/temp-data/userData.json" ]; do
-        sleep 5  # Wait for 5 seconds before checking again
+        sleep 5  # 每 5 秒检查一次
     done
-    echo "Found userData.json. Proceeding..."
+    echo "找到 userData.json 文件。继续执行..."
 
     ORG_ID=$(awk 'BEGIN { FS = "\"" } !/^[ \t]*[{}]/ { print $(NF - 1); exit }' modal-login/temp-data/userData.json)
-    echo "Your ORG_ID is set to: $ORG_ID"
+    echo "您的 ORG_ID 已设置为: $ORG_ID"
 
-    # Wait until the API key is activated by the client
-    echo "Waiting for API key to become activated..."
+    # 等待客户端激活 API 密钥
+    echo "正在等待 API 密钥激活..."
     while true; do
         STATUS=$(curl -s "http://localhost:3000/api/get-api-key-status?orgId=$ORG_ID")
         if [[ "$STATUS" == "activated" ]]; then
-            echo "API key is activated! Proceeding..."
+            echo "API 密钥已激活！继续执行..."
             break
         else
-            echo "Waiting for API key to be activated..."
+            echo "正在等待 API 密钥激活..."
             sleep 5
         fi
     done
 fi
 
-echo_green ">> Getting requirements..."
+echo_green ">> 正在获取依赖项..."
 pip install --upgrade pip
 
-# echo_green ">> Installing GenRL..."
+# echo_green ">> 正在安装 GenRL..."
 pip install gensyn-genrl==0.1.4
-pip install reasoning-gym>=0.1.20 # for reasoning gym env
-pip install trl # for grpo config, will be deprecated soon
-pip install hivemind@git+https://github.com/learning-at-home/hivemind@4d5c41495be082490ea44cce4e9dd58f9926bb4e # We need the latest, 1.1.11 is broken
+pip install reasoning-gym>=0.1.20 # 用于推理健身房环境
+pip install trl # 用于 grpo 配置，不久后将弃用
+pip install hivemind@git+https://github.com/learning-at-home/hivemind@4d5c41495be082490ea44cce4e9dd58f9926bb4e # 需要最新版本，1.1.11 版本有问题
 
-
+# 如果配置目录不存在，则创建它
 if [ ! -d "$ROOT/configs" ]; then
     mkdir "$ROOT/configs"
-fi  
+fi
+# 如果配置文件存在
 if [ -f "$ROOT/configs/rg-swarm.yaml" ]; then
-    # Use cmp -s for a silent comparison. If different, backup and copy.
+    # 使用 cmp -s 进行静默比较。如果不同，则备份并复制。
     if ! cmp -s "$ROOT/rgym_exp/config/rg-swarm.yaml" "$ROOT/configs/rg-swarm.yaml"; then
         if [ -z "$GENSYN_RESET_CONFIG" ]; then
-            echo_green ">> Found differences in rg-swarm.yaml. If you would like to reset to the default, set GENSYN_RESET_CONFIG to a non-empty value."
+            echo_green ">> 发现 rg-swarm.yaml 文件存在差异。如果您想重置为默认配置，请将 GENSYN_RESET_CONFIG 设置为非空值。"
         else
-            echo_green ">> Found differences in rg-swarm.yaml. Backing up existing config."
+            echo_green ">> 发现 rg-swarm.yaml 文件存在差异。正在备份现有配置。"
             mv "$ROOT/configs/rg-swarm.yaml" "$ROOT/configs/rg-swarm.yaml.bak"
             cp "$ROOT/rgym_exp/config/rg-swarm.yaml" "$ROOT/configs/rg-swarm.yaml"
         fi
     fi
 else
-    # If the config doesn't exist, just copy it.
+    # 如果配置文件不存在，则直接复制
     cp "$ROOT/rgym_exp/config/rg-swarm.yaml" "$ROOT/configs/rg-swarm.yaml"
 fi
 
 if [ -n "$DOCKER" ]; then
-    # Make it easier to edit the configs on Linux systems.
+    # 方便在 Linux 系统上编辑配置文件
     sudo chmod -R 0777 /home/gensyn/rl_swarm/configs
 fi
 
-echo_green ">> Done!"
+echo_green ">> 完成！"
 
 HF_TOKEN=${HF_TOKEN:-""}
-if [ -n "${HF_TOKEN}" ]; then # Check if HF_TOKEN is already set and use if so. Else give user a prompt to choose.
+# 检查 HF_TOKEN 是否已经设置，如果设置则使用，否则提示用户选择
+if [ -n "${HF_TOKEN}" ]; then
     HUGGINGFACE_ACCESS_TOKEN=${HF_TOKEN}
 else
     echo -en $GREEN_TEXT
-    read -p ">> Would you like to push models you train in the RL swarm to the Hugging Face Hub? [y/N] " yn
+    read -p ">> 您是否想将在 RL 集群中训练的模型推送到 Hugging Face Hub？[y/N] " yn
     echo -en $RESET_TEXT
-    yn=${yn:-N} # Default to "N" if the user presses Enter
+    yn=${yn:-N} # 默认选择 "N"
     case $yn in
-        [Yy]*) read -p "Enter your Hugging Face access token: " HUGGINGFACE_ACCESS_TOKEN ;;
+        [Yy]*) read -p "请输入您的 Hugging Face 访问令牌: " HUGGINGFACE_ACCESS_TOKEN ;;
         [Nn]*) HUGGINGFACE_ACCESS_TOKEN="None" ;;
-        *) echo ">>> No answer was given, so NO models will be pushed to Hugging Face Hub" && HUGGINGFACE_ACCESS_TOKEN="None" ;;
+        *) echo ">>> 未给出有效答案，因此不会将模型推送到 Hugging Face Hub" && HUGGINGFACE_ACCESS_TOKEN="None" ;;
     esac
 fi
 
 echo -en $GREEN_TEXT
-read -p ">> Enter the name of the model you want to use in huggingface repo/name format, or press [Enter] to use the default model. " MODEL_NAME
+read -p ">> 请以 huggingface 仓库/名称的格式输入您要使用的模型名称，或按 [Enter] 使用默认模型。 " MODEL_NAME
 echo -en $RESET_TEXT
 
-# Only export MODEL_NAME if user provided a non-empty value
+# 仅当用户提供非空值时才导出 MODEL_NAME
 if [ -n "$MODEL_NAME" ]; then
     export MODEL_NAME
-    echo_green ">> Using model: $MODEL_NAME"
+    echo_green ">> 使用模型: $MODEL_NAME"
 else
-    echo_green ">> Using default model from config"
+    echo_green ">> 使用配置中的默认模型"
 fi
 
-echo_green ">> Good luck in the swarm!"
-echo_blue ">> And remember to star the repo on GitHub! --> https://github.com/gensyn-ai/rl-swarm"
+echo_green ">> 祝您好运，加入集群！"
+echo_blue ">> 记得在 GitHub 上给仓库加星哦！ --> https://github.com/gensyn-ai/rl-swarm"
 
 python -m rgym_exp.runner.swarm_launcher \
     --config-path "$ROOT/rgym_exp/config" \
     --config-name "rg-swarm.yaml" 
 
-wait  # Keep script running until Ctrl+C
+wait  # 保持脚本运行，直到用户按下 Ctrl+C
