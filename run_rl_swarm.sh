@@ -16,8 +16,7 @@ export HF_HUB_DOWNLOAD_TIMEOUT=120  # 2 分钟
 export SWARM_CONTRACT="0xFaD7C5e93f28257429569B854151A1B8DCD404c2"
 export HUGGINGFACE_ACCESS_TOKEN="None"
 
-# RSA 私钥的路径。如果该路径不存在，将创建一个新的密钥对。
-# 如果需要新的 PeerID，请删除此文件。
+# RSA 私钥的路径
 DEFAULT_IDENTITY_PATH="$ROOT"/swarm.pem
 IDENTITY_PATH=${IDENTITY_PATH:-$DEFAULT_IDENTITY_PATH}
 
@@ -68,9 +67,6 @@ cleanup() {
     
     # 清理内存
     clean_memory
-
-    # 如果存在模态凭证，则删除它们
-    # rm -r $ROOT_DIR/modal-login/temp-data/*.json 2> /dev/null || true
 
     # 杀死属于此脚本进程组的所有进程
     kill -- -$$ || true
@@ -132,15 +128,8 @@ if [ "$CONNECT_TO_TESTNET" = true ]; then
     fi
 
     if ! command -v yarn > /dev/null 2>&1; then
-        # 检测 macOS 并安装 Yarn
-        if [[ "$OSTYPE" == "darwin"* ]]; then
-            echo "检测到 macOS。正在通过 Homebrew 安装 Yarn..."
-            brew install yarn
-        else
-            # 对于非 macOS 系统，使用 npm 安装 Yarn
-            echo "未找到 Yarn。正在使用 npm 全局安装 Yarn..."
-            npm install -g --silent yarn
-        fi
+        echo "检测到 macOS。正在通过 Homebrew 安装 Yarn..."
+        brew install yarn
     fi
 
     ENV_FILE="$ROOT"/modal-login/.env
@@ -267,6 +256,10 @@ else
     echo_green ">> 使用配置中的默认模型"
 fi
 
+# 设置工作线程数为 CPU 核心数
+export NUM_WORKERS=$(sysctl -n hw.ncpu)
+echo_green ">> 设置工作线程数: $NUM_WORKERS"
+
 echo_green ">> 祝您好运，加入集群！"
 echo_blue ">> 记得在 GitHub 上给仓库加星哦！ --> https://github.com/gensyn-ai/rl-swarm"
 
@@ -290,7 +283,7 @@ if [[ "$OSTYPE" == "darwin"* ]] && [[ $(uname -m) == 'arm64' ]]; then
     export PYTORCH_ENABLE_MPS_FALLBACK=1
     
     # 优化线程和内存管理
-    export OMP_NUM_THREADS=$(sysctl -n hw.ncpu)
+    export OMP_NUM_THREADS=$NUM_WORKERS
     export MKL_NUM_THREADS=$OMP_NUM_THREADS
     export NUMEXPR_NUM_THREADS=$OMP_NUM_THREADS
     export VECLIB_MAXIMUM_THREADS=$OMP_NUM_THREADS
@@ -311,13 +304,6 @@ fi
 # 启动训练 - 添加性能优化参数
 python -m rgym_exp.runner.swarm_launcher \
     --config-path "$ROOT/rgym_exp/config" \
-    --config-name "rg-swarm.yaml" \
-    --batch-size 128 \
-    --gradient-accumulation-steps 2 \
-    --mixed-precision bf16 \
-    --use-flash-attention \
-    --use-gradient-checkpointing \
-    --num-workers $(sysctl -n hw.ncpu) \
-    --cache-dir "$ROOT/model_cache"
+    --config-name "rg-swarm.yaml"
 
 wait  # 保持脚本运行，直到用户按下 Ctrl+C
